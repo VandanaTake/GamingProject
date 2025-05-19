@@ -31,7 +31,7 @@ class GamingController extends Controller
         // for given phone no. otp exists delete that otp
         Otp::where('phone_no', $phoneNo)->delete();
 
-        // Store new OTP 
+        // Save new OTP 
         Otp::create([
             'phone_no' => $phoneNo,
             'otp' => $otp,
@@ -42,7 +42,7 @@ class GamingController extends Controller
 
     public function register(Request $request)
     {
-        // Validate input
+        // input Validatation
         $validator = Validator::make($request->all(), [
             'phone_no' => 'required|digits:10|unique:user_register,phone_no',
             'name' => 'required|string|max:255',
@@ -55,7 +55,7 @@ class GamingController extends Controller
             return response(['errors' => $validator->errors()], 422);
         }
 
-        // Check OTP
+        // Check OTP exists
         $otpData = Otp::where('phone_no', $request->phone_no)
             ->where('otp', $request->otp)
             ->orderByDesc('created_at')
@@ -64,7 +64,7 @@ class GamingController extends Controller
         if (!$otpData) {
             return response()->json(['status' => 'error', 'message' => 'Invalid OTP'], 401);
         }
-
+        //check current time is grater tham otp expire
         if (Carbon::now()->gt($otpData->expires_at)) {
             return response()->json(['status' => 'error', 'message' => 'OTP expired'], 401);
         }
@@ -96,12 +96,11 @@ class GamingController extends Controller
             return response(['errors' => $validator->errors()], 422);
         }
         $user = Auth::user();
-
-        // Count today’s scores for this user
+        //check todays score count
         $scoreCountToday = Score::where('user_id', $user->id)
             ->whereDate('created_at', Carbon::today())
             ->count();
-
+        //score count grate than 3  or equal to 3
         if ($scoreCountToday >= 3) {
             return response()->json([
                 'status' => 'error',
@@ -123,18 +122,16 @@ class GamingController extends Controller
     public function overallScore()
     {
         $user = auth()->user();
-
-        // 1. Calculate total score of each user
         $userScores = Score::select('user_id', DB::raw('SUM(score) as total_score'))
             ->groupBy('user_id')
             ->orderByDesc('total_score')
             ->get();
 
-        // 2. Find total score and rank of the current user
         $rank = 0;
         $userTotal = 0;
 
         foreach ($userScores as $index => $score) {
+            //login user id and existed user is equal count the rank
             if ($score->user_id === $user->id) {
                 $userTotal = $score->total_score;
                 $rank = $index + 1;
@@ -152,8 +149,7 @@ class GamingController extends Controller
     public function weeklyScore()
     {
         $user = auth()->user();
-
-        // Week 1 starts on 28 March 2025 (Friday)
+        //week start from 2025/03/28
         $startOfWeek1 = Carbon::create(2025, 3, 28)->startOfDay();
         $now = Carbon::now();
 
@@ -162,9 +158,8 @@ class GamingController extends Controller
         $startOfWeek = $startOfWeek1->copy();
 
         while ($startOfWeek->lte($now)) {
-            $endOfWeek = $startOfWeek->copy()->addDays(6)->endOfDay(); // Thursday
+            $endOfWeek = $startOfWeek->copy()->addDays(6)->endOfDay();
 
-            // Get total scores per user in this week
             $weeklyScores = DB::table('scores')
                 ->select('user_id', DB::raw('SUM(score) as total'))
                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
@@ -172,7 +167,6 @@ class GamingController extends Controller
                 ->orderByDesc('total')
                 ->get();
 
-            // Determine current user's rank and total
             $rank = 0;
             $userScore = 0;
 
@@ -191,7 +185,7 @@ class GamingController extends Controller
             ];
 
             $weekNo++;
-            $startOfWeek->addWeek(); // Move to next week (Friday)
+            $startOfWeek->addWeek();
         }
 
         return response()->json([
